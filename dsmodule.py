@@ -9,6 +9,8 @@ from docx.enum.text import WD_COLOR_INDEX
 from scipy.sparse import hstack, vstack, csc_matrix
 from pymorphy2 import MorphAnalyzer
 morph = MorphAnalyzer()
+import nltk
+nltk.download('stopwords')
 from nltk.corpus import stopwords
 stopwd = stopwords.words('russian')
 import numpy as np
@@ -80,17 +82,13 @@ def process_document(path, region):
     data['regions'] = region
     data.columns = [str(x) for x in data.columns]
     preds = automl.predict(data.reset_index(drop=True))
-    # preds_threshold = preds.data >= ACTIVATION_CUTOFF
-    # idx_add_data = [i for i in range(len(preds_threshold)) if True in preds_threshold[i]]
-    # print(preds_threshold, )
     idx_add_data = []
     labels_toadd = []
-    for i, pred in enumetate(preds):
-        if np.max(pred) > ACTIVATION_CUTOFF:
-            idx_add_data.append(i)
-            labels_add_data.append(np.argmax(pred))
-    #labels_add_data = np.argmax(preds[idx_add_data], axis=1)
-    add_data = data.iloc[idx_add_data]
+    for i, pred in enumetate(preds): #проверить
+        if np.max(pred) > ACTIVATION_CUTOFF:#проверить
+            idx_add_data.append(i)#проверить
+            labels_add_data.append(np.argmax(pred))#проверить
+    add_data = data.iloc[idx_add_data]#проверить
     for i in range(len(doc.paragraphs)):
         for j in range(len(doc.paragraphs[i].runs)):
             if i in add_data.index:
@@ -98,8 +96,6 @@ def process_document(path, region):
     doc.save(DOCUMENTS_PATH + path.split('.')[0] + '_processed.' + path.split('.')[1])
     return True
 
-#process_document('/home/pe/Downloads/rasmetra/Архангельская область/3_1/3BB43F90-7487-48B9-BC9A-D4709F507EAE/Edition_1/Edition_Text.docx', 'Архангельская область')
-    
 def train():
     texts = []
     for i in alldata:

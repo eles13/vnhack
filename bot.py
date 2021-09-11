@@ -151,18 +151,19 @@ def document_receiver(message):
     else:
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        src = './documents/' + message.document.file_name
-        with open(src, 'wb') as new_file:
+        src = message.document.file_name
+        with open('./documents/' + src, 'wb') as new_file:
             new_file.write(downloaded_file)
         add_document(mdb, user['userid'], message.document.file_id, message.document.file_name)
         regKeyboard = types.InlineKeyboardMarkup(row_width=1)
-        for reg in regions:
-            regKeyboard.add(types.InlineKeyboardButton(reg, callback_data=f'reg|{reg}|{src}'))
+        for i, reg in enumerate(regions):
+            regKeyboard.add(types.InlineKeyboardButton(reg, callback_data=f'reg|{i}|{src}'))
         bot.send_message(message.chat.id, 'Выберите регион', reply_markup=regKeyboard)
     set_state(mdb, user['userid'], 0)
     return
         
-def process_and_save_file(path):
+def process_and_save_file(path, reg):
+    print(reg)
     os.system(f"cp {path} .{path.split('.')[1] + '_processed.' + path.split('.')[2]}")
     return
 
@@ -174,11 +175,11 @@ def send_document_from_inlines(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.split('|')[0] == 'reg')
 def document_processer(call):
-    splt = call.split('|')
-    process_document(splt[2], splt[1])
+    splt = call.data.split('|')
+    process_document('./documents/' + splt[2], regions[int(splt[1])])
     src = splt[2]
     bot.send_message(call.message.chat.id, 'Готово!', reply_markup=startKeyboard)
-    f = open('.' + src.split('.')[1] + '_processed.' + src.split('.')[2], 'rb')
+    f = open('./documents/' + src.split('.')[0] + '_processed.' + src.split('.')[1], 'rb')
     msg = bot.send_document(call.message.chat.id, f, reply_markup=startKeyboard)
     f.close()
     user = search_or_save_user(mdb, call.from_user)
