@@ -50,7 +50,7 @@ classes =['3_1', '3_7', '4_1', '3_9', '3_5', '3_3', '3_2', '4_2', '4_3', '3_6', 
 
 
 ACTIVATION_CUTOFF = 0.5
-DOUBLE_CUTOFF = 0.015
+DOUBLE_CUTOFF = 0.05
 
 clst = np.load(CLUSTERS_PATH, allow_pickle=True)
 tfidf = joblib.load(TFIDF_PATH)
