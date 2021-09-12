@@ -21,40 +21,43 @@ from sklearn.model_selection import train_test_split
 
 from lightautoml.automl.presets.tabular_presets import TabularAutoML, TabularUtilizedAutoML
 from lightautoml.tasks import Task
+from lightautoml.automl.presets.text_presets import TabularNLPAutoML
 
 RANDOM_STATE = 42
 np.random.seed(RANDOM_STATE)
 
-models_path = './'
+models_path = 'dataset/'
 TFIDF_PATH = models_path + 'tfidf.m'
 CLUSTERS_PATH = models_path + 'clusters.npy'
-AUTOML_PATH = models_path + 'automl_mine.m'
+AUTOML_PATH = models_path + 'automl.pkl'
+AUTOML_NLP_BINARY = models_path + 'binary_classifiсation.pkl'
 DOCUMENTS_PATH = './documents/'
-DATA_PATH = 'data.csv'
-DATASET_PATH = '/home/pe/Downloads/rasmetra/'
+DATA_PATH = 'dataset/all_data.csv'
+DATASET_PATH = 'dataset/DataSet_Razmetra/'
 
-with open('corrupt_new.json') as fin:
+with open('dataset/corrupt_new.json') as fin:
     alldata = json.load(fin)
+
 
 NUM_CLASSES = 11
 COLORS = [WD_COLOR_INDEX.YELLOW, WD_COLOR_INDEX.BLUE, WD_COLOR_INDEX.BRIGHT_GREEN, WD_COLOR_INDEX.DARK_BLUE,
          WD_COLOR_INDEX.DARK_RED, WD_COLOR_INDEX.DARK_YELLOW, WD_COLOR_INDEX.GRAY_25, WD_COLOR_INDEX.GREEN,
          WD_COLOR_INDEX.PINK, WD_COLOR_INDEX.RED, WD_COLOR_INDEX.VIOLET]
 
-colors_map = {'YELLOW': '4_1', 'BLUE': '3_3', 'BRIGHT_GREEN': '3_7', 'DARK_BLUE': '3_1', 'DARK_RED': '3_9',
-              'DARK_YELLOW': '3_5', 'GRAY_25': '4_2', 'GREEN': '4_3', 'PINK': '3_2', 'RED': '3_6', 'VIOLET': '3_4'}
+colors_map = {'YELLOW':'3_1', 'BLUE':'3_7', 'BRIGHT_GREEN': '4_1', 'DARK_BLUE': '3_9', 'DARK_RED': '3_5',
+              'DARK_YELLOW': '3_3', 'GRAY_25': '3_2', 'GREEN': '4_2', 'PINK':  '4_3', 'RED': '3_6', 'VIOLET': '3_4'}
+classes =['3_1', '3_7', '4_1', '3_9', '3_5', '3_3', '3_2', '4_2', '4_3', '3_6', '3_4']
 
-
-# tfidf = joblib.load(TFIDF_PATH)
-# cluster_centers = np.load(CLUSTERS_PATH)
-# automl = joblib.load(AUTOML_PATH)
 
 ACTIVATION_CUTOFF = 0.5
+DOUBLE_CUTOFF = 0.015
 
 clst = np.load(CLUSTERS_PATH, allow_pickle=True)
 tfidf = joblib.load(TFIDF_PATH)
 automl = joblib.load(AUTOML_PATH)
 morph = MorphAnalyzer()
+binary = joblib.load(AUTOML_NLP_BINARY)
+
 
 vectors = {x[0]: x[1] for x in clst}
 
@@ -70,31 +73,38 @@ TARGET_NAME = 'labels'
 def process_document(path, region):
     doc = Document(path)
     data = []
+    text=[]
     for par in doc.paragraphs:
         processed = [morph.parse(x)[0].normal_form for x in par.text.split()]
-        vec = tfidf.transform([' '.join([pr for pr in processed if pr not in stopwd and len(pr) > 1]).lower()])
-        s = []
-        for v in vectors:
-            tmp = vec.dot(vectors[v].T).mean(axis=0)
-            s = np.hstack((s,tmp))
-        data.append(s)
-    data = pd.DataFrame(data).reset_index(drop=True)
+        text.append(' '.join([pr for pr in processed if pr not in stopwd and len(pr) > 1]).lower())
+    text_data = pd.DataFrame(text, columns=['text'])
+    #binary_mask = binary.predict(text_data).data[:,0]>ACTIVATION_CUTOFF/4
+    X = tfidf.transform(text)
+    for v in vectors:
+        tmp = X.dot(vectors[v].T).mean(axis=0)
+        data = np.hstack((data,tmp))
+    data = pd.DataFrame([data]).reset_index(drop=True)
+    print(path)
     data['regions'] = region
     data.columns = [str(x) for x in data.columns]
-    preds = automl.predict(data.reset_index(drop=True))
+    preds = automl.predict(data).data[:][0]
     idx_add_data = []
     labels_toadd = []
-    for i, pred in enumetate(preds): #проверить
-        if np.max(pred) > ACTIVATION_CUTOFF:#проверить
-            idx_add_data.append(i)#проверить
-            labels_add_data.append(np.argmax(pred))#проверить
-    add_data = data.iloc[idx_add_data]#проверить
-    for i in range(len(doc.paragraphs)):
-        for j in range(len(doc.paragraphs[i].runs)):
-            if i in add_data.index:
-                doc.paragraphs[i].runs[j].font.highlight_color = COLORS[labels_add_data[i]]
-    doc.save(DOCUMENTS_PATH + path.split('.')[0] + '_processed.' + path.split('.')[1])
+    print(path)
+    for i,pred in enumerate(preds):
+        if pred > ACTIVATION_CUTOFF:
+            idx_add_data.append(i)
+    maskes=[]
+    for v in idx_add_data:
+        mask = X.dot(vectors[classes[v]].T).mean(axis=1) > DOUBLE_CUTOFF
+        for i in range(len(doc.paragraphs)):
+            for j in range(len(doc.paragraphs[i].runs)):
+                if mask[i]:# and binary_mask[i]:
+                    doc.paragraphs[i].runs[j].font.highlight_color = COLORS[v]
+    file_name = path.split('/')[-1]
+    doc.save(DOCUMENTS_PATH + file_name.split('.')[0] + '_processed.' + file_name.split('.')[1])
     return True
+
 
 def train():
     texts = []
@@ -123,7 +133,19 @@ def train():
     label = {}
     for i,v in enumerate(vectors):
         label[v]=i
-        
+    
+    with open('corrupt_normed.json') as fin:
+        bin_data = json.load(fin)
+    bin_texts = []
+    bin_labels = []
+    for i in bin_data:
+        for j in (bin_data[i]):
+            if j['type']=='Edition':
+                bin_texts.append(j['text'].lower())
+                bin_labels.append(1)
+            elif j['type']=='NC_Edition':
+                bin_texts.append(j['text'].lower())
+                bin_labels.append(0)
     data = []
     for file in tqdm.tqdm(files):
         try:
@@ -132,6 +154,8 @@ def train():
             for par in doc.paragraphs:
                 processed = [morph.parse(x)[0].normal_form for x in par.text.split()]
                 text.append(' '.join([pr for pr in processed if pr not in stopwd and len(pr) > 1]).lower())
+                bin_texts.append(text[-1])
+                bin_labels.append(0)
             X = vectorizer.transform(text)
             s = []
             for v in vectors:
@@ -141,6 +165,24 @@ def train():
         except:
             print(file)
             continue
+    
+    bin_data = pd.DataFrame(bin_texts, columns=['text'])
+    bin_data['labels'] = bin_labels
+    task = Task('binary', )
+    roles = {'target': TARGET_NAME,
+         'text': ['text']
+         }
+    automl = TabularNLPAutoML(task = task, 
+                           timeout = TIMEOUT,
+                           cpu_limit = N_THREADS,
+                           general_params = {'use_algos': [['lgb', 'lgb_tuned', 'cb']]},
+                           reader_params = {'cv': N_FOLDS, 'n_jobs': N_THREADS, 'random_state': RANDOM_STATE},
+                           linear_pipeline_params = {'text_features': "tfidf"},
+                           gbm_pipeline_params = {'text_features': "tfidf"},
+                           text_params = {'lang': 'ru'}
+                          )
+    automl.fit_predict(bin_data, roles = roles)
+    joblib.dump(automl, AUTOML_NLP_BINARY)
     labels = []
     idx = []
     regs = []
@@ -198,12 +240,12 @@ def train():
                                          'n_jobs': N_THREADS},
                           )
     oof_pred = automl.fit_predict(tr_data, roles=roles)
+    
     joblib.dump(vectorizer, TFIDF_PATH)
     joblib.dump(automl, AUTOML_PATH)
     np.save(CLUSTERS_PATH, np.array([np.array([key, vectors[key]]) for key in vectors.keys()]))
     return True
-    
-    
+
 def finetune_on_feedback(path, feedback, region):
     global vectors
     global alldata

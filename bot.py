@@ -125,7 +125,7 @@ def add_document(mdb, userid, fileid, filename):
 def start_command(message):
     user = search_or_save_user(mdb, message.from_user)
     set_state(mdb, user['userid'], 0)
-    bot.send_message(message.chat.id, 'Привет. Это бот для проверки документов на коррупционные факторы. Отправь нам документ и мы вышлем экспертизу', reply_markup=startKeyboard)
+    bot.send_message(message.chat.id, 'Привет. Это бот для проверки документов на коррупциогенные факторы. Отправь нам документ и мы вышлем экспертизу', reply_markup=startKeyboard)
     return
 
 @bot.message_handler(func=lambda x: x.text in ['Отправить документ на проверку', 'Просмотреть отправленные документы'] and get_state(mdb, x.from_user.id) == 0)

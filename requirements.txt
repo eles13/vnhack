@@ -1,0 +1,11 @@
+python-docx
+lightautoml
+pymorphy2
+scikit-learn
+pytelegrambotapi
+pymongo
+tqdm
+pandas
+numpy
+joblib
+
